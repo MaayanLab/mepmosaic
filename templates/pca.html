@@ -1,0 +1,68 @@
+
+
+
+<!DOCTYPE html>
+<html>
+<head>
+	<title>PCA Visualization</title>
+</head>
+
+<!-- Jquery -->
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.4/jquery.min.js"></script>
+
+<script src="https://code.highcharts.com/highcharts.js"></script>
+<script src="https://code.highcharts.com/highcharts-3d.js"></script>
+<script src="https://code.highcharts.com/modules/exporting.js"></script>
+<script type="text/javascript" src="/MEPmosaic/static/js/pca.js"></script>
+
+<!-- <div id="container" style="height: 400px"></div> -->
+
+<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7" crossorigin="anonymous">
+
+<link rel="stylesheet" type="text/css" href="/MEPmosaic/static/css/style.css">
+
+<div class="container" role="main" id="main">
+	<h1>3D PCA Visualization</h1>
+	<br>
+	<!-- <hr> -->
+	<div class="container">
+		<div class="row">
+
+			<div class="col-xs-12 col-sm-5 col-md-6">
+				<div class="panel panel-default">
+				 	<div class="panel-body">
+				 		<div id="lig-pca-container"></div>
+                    </div>
+                    {% if lig_pca %}
+                        <script>
+                        	console.log("Found pca for ligands")
+                            $(function () {
+                                plotPCA({{ lig_pca|safe }}, "Ligands","lig-pca-container");
+                            });
+                        </script>
+                    {% endif %}
+				</div>
+			</div>
+
+			<div class="col-xs-12 col-sm-5 col-md-6">
+				<div class="panel panel-default">
+
+					<div class="panel-body">
+						<div id="ecm-pca-container"></div>
+					</div>
+                    {% if ecm_pca %}
+                        <script>
+                        	console.log("Found pca for ecmps")
+                            $(function () {
+                                plotPCA({{ ecm_pca|safe }}, "ECMps", "ecm-pca-container");
+                            });
+                        </script>
+                    {% endif %}
+				</div>
+			</div>
+		</div>
+	</div>
+</div>
+
+
+

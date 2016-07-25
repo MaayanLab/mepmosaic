@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>Mosaic visualization of MEP</title>
+</head>
+
+<body>
+
+<!-- Jquery -->
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.4/jquery.min.js"></script>
+
+<!-- D3 -->
+<script src="//d3js.org/d3.v3.min.js" charset="utf-8"></script>
+
+<!-- D3-tip -->
+<script src="http://labratrevenge.com/d3-tip/javascripts/d3.tip.v0.6.3.js"></script>
+<!-- <script src="MEPmosaic/static/Caged-d3-tip-07cf158/index.js"></script>
+ -->
+
+<!-- Latest compiled and minified CSS -->
+<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7" crossorigin="anonymous">
+
+<!-- Latest compiled and minified JavaScript -->
+<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
+
+
+<link rel="stylesheet" type="text/css" href="MEPmosaic/static/css/style.css">
+
+<!-- Mosaic visualizer functions -->
+<script type="text/javascript" src="MEPmosaic/static/js/visualizer.js"></script>
+
+<!-- HTML5 Slider -->
+<script type="text/javascript" src="MEPmosaic/static/js/html5slider.js"></script>
+
+<script type="text/javascript">
+
+var MEP_data = {};  // data for MEP, including .meta_col .meta_row .signatures .layout .cell_order .
+
+var sticky_top;
+
+// SVG canvas dimension
+var tile_dim_px = 250;
+
+
+// Global visualization options
+var colorScale = d3.scale.linear()
+	    .domain([-2.5, 0, 2.5])
+	    // .domain([-5, 0, 5])
+	    // .clamp(true)  // color scale is clammed to boundary if values are out of range
+	    .range(["rgb(33,102,172)", "rgb(247,247,247)", "rgb(178,24,34)"]);  // RdBu from Colorbrewer
+
+var monoScale = d3.scale.linear()
+	.domain([0.0, 10.0])
+	.clamp(true)
+	.range(["rgb(255,255,255)", "rgb(0,0,0)"]);
+
+// Tip elements used by D3-tip
+var tileTip = d3.tip()
+    .attr("class", "d3-tip")
+    .offset([-6, 0])
+    .html(function(d) {return d;});
+
+var attrTip = d3.tip()
+	.attr("class", "d3-tip")
+	.offset([-1, 6])
+	.direction("e")
+	.html(function(d) {
+		var html = "";
+		for (var key in d) {
+			html += key + ": " + d[key] + "<br>";
+		}
+		return html;
+	});
+
+function makeSidebar() {
+
+	// Construct sidebar panel
+	var sidebar = d3.select("#sidebar");
+
+	sidebar.append("h3").html("Selection");
+
+	// Ligand selection panel
+	sidebar.append("h4").html("Ligands");
+
+	sidebar.append("select")
+		.attr("id", "lig-selector")
+		.attr("name", "lig_list")
+		.attr("onchange", "lig_sel = this; updateSelection();")
+		;
+
+	// Populate ligand list selectors
+	var lig_selector = $("#lig-selector");
+	lig_selector.append($("<option>")
+		.attr("value", -1)
+		.text("No filter"));
+	for (var i = 0; i < lig_list.length; i++) {
+		lig_selector.append($("<option>")
+			.attr("value", i)
+			.text(lig_list[i][0]));
+	}
+
+	// Microenvironment selection panel
+	sidebar.append("h4").html("Microenvironments");
+
+	sidebar.append("select")
+		.attr("id", "me-selector")
+		.attr("name", "me_list")
+		.attr("onchange", "me_sel = this; updateSelection();")
+		;
+
+	// Populate gene list selectors
+	var me_selector = $("#me-selector");
+	me_selector.append($("<option>")
+		.attr("value", -1)
+		.text("No filter"));
+	for (var i = 0; i < me_list.length; i++) {
+		me_selector.append($("<option>")
+			.attr("value", i)
+			.text(me_list[i][0]));
+	}
+
+	sidebar.append("h4").html("Color Scale")
+
+	sidebar.append("input")
+		.attr("type","range")
+		.attr("id","range_colorScale")
+		.attr("name","scale")
+		.attr("min",0.0001)
+		.attr("max",7.5)
+		.attr("value",2.5)
+		.attr("step",0.0001)
+		.attr("onchange","scaleColor(this);")
+		// .attr("oninput","scaleColor(this);") // change dynamically
+
+	var color_slider = $("#range_colorScale");
+
+	sidebar.append("h2").html("\n")
+
+	sidebar.append("input")
+		.attr("type","button")
+		.attr("name","button")
+		.attr("value","Reset Scale")
+		.attr("onclick","resetColorScale(this);")
+		// .attr("min",0)
+		// .attr("max",5)
+		// .attr("step",0.01)
+		// .attr("id","range_colorScale")
+		// .onMouseup("scaleColor();")
+		// .onChange=("seeScale();")
+
+
+
+	// sidebar.append("button")
+	// 	.attr("value","Reset Scale")
+	// 	.attr("name","scale-button")
+		// .onchange("resetColorScale(G_VAR.nodes, G_VAR.canvasRGB, G_VAR.canvasSize);")
+};
+
+$(document).ready(function() {
+	// Get signature meta data
+	// Sample meta data
+	$.ajax({
+		type: "GET",
+		url: "MEPmosaic/static/data/MEP_meta_row.csv",
+		dataType: "text",
+		success: function(data) {
+			MEP_data.meta_row = parseCsv(data);
+		}
+	});
+
+	// Feature meta data
+	$.ajax({
+		type: "GET",
+		url: "MEPmosaic/static/data/MEP_meta_col.csv",
+		dataType: "text",
+		success: function(data) {
+			MEP_data.meta_col = parseCsv(data);
+		}
+	});
+
+	// Get signatures as array of array. Data matrix is transposed Data matrix is transposed
+	$.ajax({
+		type: "GET",
+		url: "MEPmosaic/static/data/mtx_MCF7.csv",
+		dataType: "text",
+		success: function(data) {
+			MEP_data.MCF7 = parseCsv(data, Number);  // converts string to number
+		}
+	});
+
+	$.ajax({
+		type: "GET",
+		url: "MEPmosaic/static/data/mtx_PC3.csv",
+		dataType: "text",
+		success: function(data) {
+			MEP_data.PC3 = parseCsv(data, Number);  // converts string to number
+		}
+	});
+
+	$.ajax({
+		type: "GET",
+		url: "MEPmosaic/static/data/mtx_YAPC.csv",
+		dataType: "text",
+		success: function(data) {
+			MEP_data.YAPC = parseCsv(data, Number);  // converts string to number
+		}
+	});
+
+	// Get tile order from Network2Canvas
+	// layout.text is a sequential layout specification with base sqrt(n)
+	$.ajax({
+		type: "GET",
+		url: "MEPmosaic/static/data/MEP_corrmat.json",
+		// url: "MEPmosaic/static/data/MEP_abs_cor_mat_short.json",
+		dataType: "text",
+		success: function(data) {
+			MEP_data.layout = JSON.parse(data);
+		}
+	});
+
+	// Get the chan order
+	$.ajax({
+		type: "GET",
+		url: "MEPmosaic/static/data/chan_order.txt",
+		dataType: "text",
+		success: function(data) {
+			MEP_data.chan_order = data.split("\n").filter(function(x) {return x !== ""});
+		}
+	});
+
+	// Get cell line order
+	$.ajax({
+		type: "GET",
+		url: "MEPmosaic/static/data/cell_order.txt",
+		dataType: "text",
+		success: function(data) {
+			MEP_data.cell_order = data.split("\n").filter(function(x) {return x !== ""});
+		}
+	});
+
+	// Ligand list
+	$.ajax({
+		type: "GET",
+		url: "MEPmosaic/static/data/lig_list.csv",
+		dataType: "text",
+		success: function(data) {
+			lig_list = parseCsv(data);
+		}
+	});
+
+	// ME list
+	$.ajax({
+		type: "GET",
+		url: "MEPmosaic/static/data/me_list.csv",
+		dataType: "text",
+		success: function(data) {
+			me_list = parseCsv(data);
+		}
+	});
+});
+
+
+
+// After all data has loaded
+$(document).ajaxStop(function() {
+
+	makeSidebar();
+
+	var tile_dim_px = 300;
+	// var tile_dim_px = 250;
+	// makeSidebar(2 * tile_dim_px)
+
+	// Get feature order from Network2Canvas
+	var MEP_ids = getColumn(MEP_data.meta_row, "id");  // of data
+
+	// The order is allowed to contain duplicates
+	var MEP_order = MEP_data.layout.texts.map(function(id) {
+		return MEP_ids.indexOf(id);
+	});
+
+	// var MEP_cell_ids = getColumn(MEP_data.meta_col, "cell_id");
+	var MEP_chan_ids = getColumn(MEP_data.meta_col, "id");
+
+	// Populate table of svg canvases.
+	var svg_table = $("#svg-table");
+
+	// Cell labels in headers
+	var header = $("<tr>").appendTo(svg_table.append($("<thead>")));
+
+	// svg_table
+	header.append($("<th>"));  // empty
+	for (var i = 0; i < MEP_data.cell_order.length; i++) {
+		header.append($("<th>").text(MEP_data.cell_order[i]));
+			// .style("font-size", "15px")
+			// .style("font-size", "20px")
+		// header.append($("h2").text(MEP_data.cell_order[i]));
+	}
+
+	// document.getElementById("<th>").style.fontSize = "large"
+
+	// MAIN VISUALIZATION LOOP
+	// -------------------------------------------------------------
+	// Loop over every experimental condition, outer loop.
+	for (var i = 0; i < MEP_data.chan_order.length; i++) {
+		var chan_sel = MEP_data.chan_order[i];
+
+		// // Look up metadata for perturbation id
+		var chan_meta_data = getChanMetaData(MEP_data.meta_col, chan_sel);
+
+		var row = $("<tr>")
+			.appendTo(svg_table);
+
+		d3.selectAll(row)
+			.datum(chan_sel)
+			.on("click", function(d) {
+				// Look up id
+				d3.select("#chan_panel").html(d + "<br>" + chanDescrIname(getChanMetaData(MEP_data.meta_col, d)));
+		});
+
+		// add row labels
+		var th = $("<th>")
+			.attr("id", chan_sel)
+			.attr("class", "vertical-header-left")
+			.appendTo(row);
+
+		// chan label
+		var label_svg = d3.select("#" + chan_sel)
+			.datum(chan_meta_data)
+			.append("svg");
+
+		var label_text = label_svg.append("text")
+			.attr("class", "label")
+			.attr("x", 55)
+			.attr("y", 15)
+			.style("font-size", "15px")
+			.style("text-anchor", "middle")
+			.text(chanDescrIname(chan_meta_data))
+			.call(attrTip)  // initialized the attribute tip
+			.on("mouseover", function(d) {
+				attrTip.show(d);
+			})
+			.on("mouseout", function(d) {
+				attrTip.hide();
+			});
+
+		// Trim svg element to boundary box
+		trimSvg(label_svg);
+
+		// Experimental conditions, inncer loop.
+		for (var j = 0; j < MEP_data.cell_order.length; j++) {
+
+			// find data entry that satisfies both selections
+			var cell_sel = MEP_data.cell_order[j];
+
+			var cell_data = MEP_data[cell_sel];
+
+			var table_entry = $("<td>")
+				.attr("class", "grid")
+				.appendTo(row);
+
+			var MEP_sel = MEP_chan_ids.map(function(id) {return id === chan_sel})
+
+			if (MEP_sel.indexOfAll(true).length > 1) {
+				console.log("WARNING: multiple signatures found for ", cell_sel, " ", chan_sel, ". Only one shown.");
+			}
+
+			var MEP_k = MEP_sel.indexOf(true);
+
+			d3.selectAll(table_entry)
+				.datum(cell_sel)
+				.on("click", function(d) {
+					d3.select("#cell_panel").html(d);
+					}
+				);
+
+			var svg_MEP = d3.selectAll(table_entry)
+				.append("div")
+					.attr("class", "border-container")
+					.append("svg")
+						.attr("width", tile_dim_px)
+						.attr("height", tile_dim_px)
+						.attr("class", "grid");
+
+			var chan_data = cell_data.map(function(value,index) {return value[MEP_k]});
+
+			// console.log(chan_data)
+			// var dmax = percentile(chan_data,0.95)
+
+			// console.log(dmax)
+
+			// var colorScale = d3.scale.linear()
+			//     .domain([-dmax, 0, dmax])
+			//     // .domain([-5, 0, 5])
+			//     // .clamp(true)  // color scale is clammed to boundary if values are out of range
+			//     .range(["rgb(33,102,172)", "rgb(247,247,247)", "rgb(178,24,34)"]);
+
+			var rects = svg_MEP.selectAll(".cell")
+					.data(buildGridData(chan_data, MEP_order, tile_dim_px))
+					.enter().append("svg:rect")
+					.attr("class", "rect-MEP")
+					.attr("x", function(d) {return(d.x);})
+					.attr("y", function(d) {return(d.y);})
+					.attr("width", function(d) {return(d.size);})
+					.attr("height", function(d) {return(d.size);})
+					.style("fill", function(d) {
+							if (isNaN(d.num)) {
+								return "white";
+							} else {
+								return(colorScale(d.num));
+							}
+						}
+					)
+					.call(tileTip)  // initialize tip function to svg element
+					.on("click", function(d) {
+						// Unselect previous selection in selection canvas.
+						d3.selectAll(".selected")
+							.classed("selected", false)
+							.attr("style", function(d) {
+								return("fill: " + monoScale(d.num) + ";");
+							});
+						// find legend grid of 
+						d3.selectAll("#legend_1_" + d.feature_id)
+							.classed("selected", true)
+							.attr("style", function(d) {
+								return("fill: rgb(31,120,180);")
+							});
+
+						// Update meta panel
+						d3.select("#meta_panel1").html(
+							MEP_data.meta_row[d.feature_id + 1][2] + "<br>" +
+							MEP_data.meta_row[d.feature_id + 1][8]
+							);
+					})
+					.on("mouseover", function(d) {
+						tileTip.show(
+							// MEP_data.meta_row[d.feature_id + 1][2] + ":" + MEP_data.meta_row[d.feature_id + 1][8] + 
+							// "<br>mean_zscore = " + d.num.toPrecision(3));
+							MEP_data.meta_row[d.feature_id + 1][0] + "<br>RZSnorm_score = " + d.num.toPrecision(3));
+					})
+					.on("mouseout", function(d) {
+						tileTip.hide();
+					});
+		};
+	};
+
+	sticky_top = $("#sidebar").offset().top;
+});
+
+
+// Scroll callback function. For fixed user interfaces.
+$(window).scroll(function() {
+	var window_top = $(window).scrollTop();
+
+	if (sticky_top < window_top) {
+		$("#sidebar").css({position: "fixed", top: 0});
+	} else {
+		$("#sidebar").css("position", "absolute");
+	}
+});
+
+</script>
+
+</script>
+
+<div class="container" role="main" id="main">
+	<h1>Mosaic visualization of high-content imaging assays of three cancer cell types following treatment
+		with ligand-microenvironment pairs</h1>
+	<br>
+	<!-- <hr> -->
+	<div class="container">
+		<div class="row">
+
+			<div class="col-xs-12 col-sm-7 col-md-6">
+				<div class="panel panel-default">
+						<div class="panel-heading">Description</div>
+					 	<div class="panel-body">
+					 		<p>Data are generated by OHSU's <a href="http://www.lincsproject.org/centers/data-and-signature-generating-centers/oregon-u/">MEP-LINCS</a> Center. Each cell type was treated with one of 46 extracellular matrix (ECM) proteins in combination with one of 56 ligands. PLates were imaged after using the scanR image analysis software using three staining sets, each with a different set of endpoints.</p>
+					 		<ul>
+					 			<li>SS1: Morphology and Metabolism (Phalloidin, CellMask, MitoTracker)</li>
+					 			<li>SS2: Cell Cycle and Nuclear State (H3K9Me3, Fibrillarin, EdU)</li>
+					 			<li>SS3: Lineage Status (KRT5, KRT19, CellMask)</li>
+					 		</ul>
+					 		<p>Data were centered to the DMSO control on each plate using the median-based RZS normalization method (<a href="http://journals.plos.org/plosone/article?id=10.1371/journal.pone.0080999">Gustafsdotter et al.</a>), then averaged accross replicates. The layout of the tiles is determined by a simulated annealing algorithm (<a href="http://www.maayanlab.net/N2C">Network2Canvas</a>). The algorithm attempts to position MEPs based on expression similarity across samples and conditions. The layout of MEP conditions is identical for each mosaic.</p>
+
+					 		<p>For each of the data panels, <b><span class="red">red</span></b> represents up-regulation relative to DMSO and <b><span class="blue">blue</span></b> represents down-regulation relative to DMSO. Use the toolbar on the right to highlight conditions of interest and adjust the contrast between mosaic tiles.
+					 	</div>
+				</div>
+			</div>
+
+			<div class="col-xs-12 col-sm-5 col-md-6">
+				<div class="panel panel-default">
+					<div class="panel-heading">Access data</div>
+
+					<div class="panel-body">
+						<p>In standardized .csv format. Main data are stored in matrices (MEP conditions in rows and imaging readouts in columns). Associated metadata for the rows and columns are stored in seperate tables. The MEP correlation matrix used to generate the moscaic layouts is is also available for download.
+						</p>
+
+						<div class="panel panel-default">
+							<div class="panel-heading">.csv files</div>
+							<div class="panel-body">
+<table class="table table-condensed">
+									<thead>
+										<tr>
+											<th>MEP Data</th>
+											<th>Metadata</th>
+										</tr>
+									</thead>
+									<tbody >
+										<tr>
+											<td>
+												<a href="MEPmosaic/static/data/mtx_MCF7.csv" target="_blank"><span class="glyphicon glyphicon-download-alt" aria-hidden="true"></span> MCF7 data </a>
+											</td>
+											<td>
+												<a href="MEPosaic/static/data/MEP_meta_row.csv" target="_blank"><span class="glyphicon glyphicon-download-alt" aria-hidden="true"></span> Row metadata </a>
+											</td>
+										</tr>
+										<tr>
+											<td>
+												<a href="MEPmosaic/static/data/mtx_PC3.csv" target="_blank"><span class="glyphicon glyphicon-download-alt" aria-hidden="true"></span> PC3 data </a>
+											</td>
+
+											<td>
+												<a href="MEPmosaic/static/data/MEP_meta_col.csv" target="_blank"><span class="glyphicon glyphicon-download-alt" aria-hidden="true"></span> Column metadata</a>
+											</td>
+										</tr>
+										<tr>
+											<td>
+												<a href="MEPmosaic/static/data/mtx_YAPC.csv" target="_blank"><span class="glyphicon glyphicon-download-alt" aria-hidden="true"></span> YAPC data </a>
+											</td>
+
+											<td>
+												<a href="MEPmosaic/static/data/MEP_corrmat.tsv.csv" target="_blank"><span class="glyphicon glyphicon-download-alt" aria-hidden="true"></span> MEP correlation matrix </a>
+											</td>
+										</tr>
+									</tbody>
+								</table>
+
+
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<div class="container-fluid">
+		<div class="row">
+		 	<!-- <h2>Mosaic visualization</h2> -->
+		 	<p class="text-center text-muted">Hover over tiles or assays for more information. Tooltips may not work properly in Safari and IE.</p>
+<!-- 			<div class="col-xs-1">
+				<div id="sidebar"></div>
+			</div>
+
+			<div class="col-xs-11">
+				<table id="svg-table"></table>
+			</div> -->
+			<div class="col-xs-11">
+				<table id="svg-table"></table>
+			</div>
+
+			<div class="col-xs-1">
+				<div id="sidebar"></div>
+			</div>
+		</div>
+	</div>
+</div>
+
+<footer class="footer panel-footer">
+	<div class="container text-center">
+		<p class="text-muted">Developed by the <a href="http://icahn.mssm.edu/research/labs/maayan-laboratory">Ma'ayan laboratory</a>.</p>
+	</div>
+</footer>
+</body>
+</html>

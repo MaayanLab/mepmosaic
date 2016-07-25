@@ -1,0 +1,8 @@
+id,chan_iname,chan_stainset,chan_desc
+SS-1-1,Actin ,SS1,Cellular actin cytoskeleton assayed using 500 μL Alexa488-conjugated phalloidin (Life Technologies # A12379)
+SS-1-2,Mitochondria ,SS1,Cellular mitochondria assayed using 200 μl of 10 X MitoTracker solution
+SS-1-3,Nuclear DNA ,SS1,Nuclear DNA assayed using 75 μL 0.5 mg/mL DAPI (Fisher 50-310-420)
+SS-2-1,DNA Synthesis ,SS2,Nuclear DNA synthesis assayed using 200 μL of 0.1 mM EdU (5-ethynyl-2'-deoxyuridine; Life Technologies #C10357)
+SS-2-2,Riboproteins ,SS2,Nuclear ribonucleoproteins assayed using 187.5 μL fibrillarin antibody
+SS-2-3,Heterochromatin ,SS2,Constitutive nuclear heterochromatin assayed using 187.5 μL histone H3K9Me3 antibody (Abcam #ab8898)
+SS-3-1,KRT19 – KRT5 ,SS3,Cytoplasmic keratin 19 assayed using 250 μL KRT19 antibody (Millipore #MAB3238); Cytoplasmic keratin 5 assayed using 187.5 μL KRT5 antibody (BioLegend #905501)

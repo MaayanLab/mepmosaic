@@ -1,0 +1,24 @@
+{
+	"id": "mepmosaic",
+	"instances": 1,
+	"cpus": 1,
+	"mem": 1024,
+	"container": {
+		"type": "DOCKER",
+		"docker": {
+			"image": "146.203.54.165:5000/mepmosaic:latest",
+			"forcePullImage": true,
+			"network": "BRIDGE",
+			"portMappings": [
+				{
+					"containerPort": 5000,
+					"hostPort": 0,
+					"protocol": "tcp"
+				}
+			]
+		}
+	},
+	"labels": {
+		"public": "true"
+	}
+}
