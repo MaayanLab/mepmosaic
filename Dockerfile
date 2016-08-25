@@ -16,6 +16,7 @@ RUN apt-get update && apt-get install -y \
 
 # pip installs
 RUN pip install -Iv Flask==0.10.1
+RUN pip install pyyaml
 
 # RUN pip install \
 # 	numpy \
